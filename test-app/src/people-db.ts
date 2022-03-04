@@ -1,7 +1,13 @@
 import { Construct } from "constructs";
 import { aws_dynamodb, aws_lambda } from "aws-cdk-lib";
-import { Table, Function, $util, AppsyncResolver } from "functionless";
-
+import {
+  Table,
+  Function,
+  $util,
+  AppsyncResolver,
+  ResolverArguments,
+  ResolverFunction,
+} from "functionless";
 import { QueryResolvers, MutationResolvers, Person } from "./generated-types";
 
 export class PeopleDatabase extends Construct {
@@ -34,55 +40,49 @@ export class PeopleDatabase extends Construct {
       })
     );
 
-    this.getPerson = new AppsyncResolver<
-      QueryResolvers["getPerson"]["args"],
-      QueryResolvers["getPerson"]["result"],
-      QueryResolvers["getPerson"]["parent"]
-    >(($context) => {
-      const person = this.personTable.getItem({
-        key: {
-          id: $util.dynamodb.toDynamoDB($context.arguments.id),
-        },
-        consistentRead: true,
-      });
+    this.getPerson = new AppsyncResolverWrapper<QueryResolvers["getPerson"]>(
+      ($context) => {
+        const person = this.personTable.getItem({
+          key: {
+            id: $util.dynamodb.toDynamoDB($context.arguments.id),
+          },
+          consistentRead: true,
+        });
 
-      if (person === undefined) {
-        return undefined;
+        if (person === undefined) {
+          return undefined;
+        }
+
+        const score = this.computeScore(person);
+        return {
+          ...person,
+          score,
+        };
       }
+    );
 
-      const score = this.computeScore(person);
-      return {
-        ...person,
-        score,
-      };
-    });
-
-    this.addPerson = new AppsyncResolver<
-      MutationResolvers["addPerson"]["args"],
-      MutationResolvers["addPerson"]["result"],
-      MutationResolvers["addPerson"]["parent"]
-    >(($context) => {
-      const person = this.personTable.putItem({
-        key: {
-          id: {
-            S: $util.autoId(),
+    this.addPerson = new AppsyncResolverWrapper<MutationResolvers["addPerson"]>(
+      ($context) => {
+        const person = this.personTable.putItem({
+          key: {
+            id: {
+              S: $util.autoId(),
+            },
           },
-        },
-        attributeValues: {
-          name: {
-            S: $context.arguments.input.name,
+          attributeValues: {
+            name: {
+              S: $context.arguments.input.name,
+            },
           },
-        },
-      });
+        });
 
-      return person;
-    });
+        return person;
+      }
+    );
 
     // example of inferring the TArguments and TResult from the function signature
-    this.updateName = new AppsyncResolver<
-      MutationResolvers["updateName"]["args"],
-      MutationResolvers["updateName"]["result"],
-      MutationResolvers["updateName"]["parent"]
+    this.updateName = new AppsyncResolverWrapper<
+      MutationResolvers["updateName"]
     >(($context) =>
       this.personTable.updateItem({
         key: {
@@ -101,10 +101,8 @@ export class PeopleDatabase extends Construct {
     );
 
     // example of explicitly specifying TArguments and TResult
-    this.deletePerson = new AppsyncResolver<
-      MutationResolvers["deletePerson"]["args"],
-      MutationResolvers["deletePerson"]["result"],
-      MutationResolvers["deletePerson"]["parent"]
+    this.deletePerson = new AppsyncResolverWrapper<
+      MutationResolvers["deletePerson"]
     >(($context) =>
       this.personTable.deleteItem({
         key: {
@@ -112,5 +110,29 @@ export class PeopleDatabase extends Construct {
         },
       })
     );
+  }
+}
+
+type ResolverBase = {
+  args: ResolverArguments;
+  parent: unknown;
+  result: unknown;
+};
+
+class AppsyncResolverWrapper<
+  ResolverType extends ResolverBase
+> extends AppsyncResolver<
+  ResolverType["args"],
+  ResolverType["result"],
+  ResolverType["parent"]
+> {
+  constructor(
+    fn: ResolverFunction<
+      ResolverType["args"],
+      ResolverType["result"],
+      ResolverType["parent"]
+    >
+  ) {
+    super(fn);
   }
 }
