@@ -24,6 +24,9 @@
     "strictPropertyInitialization": true,
     "stripInternal": true,
     "target": "ES2019",
+    "paths": {
+      "functionless": ["../"]
+    },
     "plugins": [
       {
         "transform": "functionless/lib/compile"
