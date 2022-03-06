@@ -9,7 +9,6 @@ import {
   ResolverFunction,
 } from "functionless";
 import { QueryResolvers, MutationResolvers, Person } from "./generated-types";
-
 export class PeopleDatabase extends Construct {
   readonly personTable;
   readonly computeScore;
@@ -113,26 +112,38 @@ export class PeopleDatabase extends Construct {
   }
 }
 
-type ResolverBase = {
-  args: ResolverArguments;
-  parent: unknown;
-  result: unknown;
-};
+/** 
+ * Wrapper class to make using AppsyncResolver less verbose by using only the resolver name once instead of 3 times
+ * AppsyncResolver<
+      MutationResolvers["deletePerson"]["args"],
+      MutationResolvers["deletePerson"]["result"],
+      MutationResolvers["deletePerson"]["source"]
+    > is turned into 
+    AppsyncResolverWrapper<
+      MutationResolvers["deletePerson"]
+    >
+ */
 
 class AppsyncResolverWrapper<
   ResolverType extends ResolverBase
 > extends AppsyncResolver<
   ResolverType["args"],
   ResolverType["result"],
-  ResolverType["parent"]
+  ResolverType["source"]
 > {
   constructor(
     fn: ResolverFunction<
       ResolverType["args"],
       ResolverType["result"],
-      ResolverType["parent"]
+      ResolverType["source"]
     >
   ) {
     super(fn);
   }
 }
+
+type ResolverBase = {
+  args: ResolverArguments;
+  source: unknown;
+  result: unknown;
+};
